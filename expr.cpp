@@ -175,6 +175,54 @@ void simplify(std::vector<expr_token> &v) {
 	v = std::move(out);
 }
 
+
+void simplify(sn_reloc &r) {
+	simplify(r.expr);
+
+	// remove truncation checks here....
+
+	const auto &a = r.expr.front();
+	if (r.expr.size() >= 3 && a.op == OP_AND) {
+
+		unsigned size = 0;
+		bool check = false;
+		switch(r.type) {
+			case RELOC_1: size = 1; break;
+			case RELOC_2: size = 2; break;
+			case RELOC_3: size = 3; break;
+			case RELOC_4: size = 4; break;
+			case RELOC_1_WARN: size = 1; check = true; break;
+			case RELOC_2_WARN: size = 2; check = true; break;
+			case RELOC_3_WARN: size = 3; check = true; break;
+
+			default:
+				return;
+		}
+
+
+		const auto &b = r.expr[1];
+		if (b.op != V_CONST) return;
+		bool tc = false;
+		if (b.value == 0xff && size == 1) tc = true;
+		if (b.value == 0xffff && size == 2) tc = true;
+		if (b.value == 0xffffff && size == 3) tc = true;
+		if (b.value == 0xffffffff && size == 4) tc = true;
+
+		if (tc) {
+			if (check) {
+				switch(size) {
+				case 1: r.type = RELOC_1; break;
+				case 2: r.type = RELOC_2; break;
+				case 3: r.type = RELOC_3; break;
+				}
+			}
+			r.expr.erase(r.expr.begin());
+			r.expr.erase(r.expr.begin());
+		}
+
+	}
+}
+
 #if 0
 void resolve(const sn_section &s, omf::segment &seg) {
 
@@ -433,7 +481,6 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 
 				const auto &a = r.expr.front();
 
-
 				// constant expression?
 				if (r.expr.size() == 1 && is_const(a.op)) {
 					uint32_t value = a.value;
@@ -474,6 +521,7 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 				// truncation checks
 				// symbol & 0xff/ffff/fffff -- OP_AND CONST SYMBOL 
 
+
 				// same-bank jsr check
 				// OP_SUB OP_AND 0xff0000 SYMBOL(current segment) SYMBOL (jsr target)
 
@@ -501,7 +549,10 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 						is.segment = c.op >> 8;
 						is.segment_offset = c.value;
 						ok = true;
-					} else if (a.op == OP_AND && is_const(b.op) && is_omf(c.op)) {
+					}
+					#if 0
+					// now handled as part of simplify.
+					else if (a.op == OP_AND && is_const(b.op) && is_omf(c.op)) {
 						// auto-truncation check?
 						if ((b.value == 0xff) && size == 1) ok = true;
 						if ((b.value == 0xffff) && size == 2) ok = true;
@@ -513,6 +564,7 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 							check = false;
 						}
 					}
+					#endif
 				}
 				else if (r.expr.size() == 5 && size == 2) {
 					const auto &b = r.expr[1];

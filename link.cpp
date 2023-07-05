@@ -466,6 +466,7 @@ int usage(int rv) {
 
 
 extern void simplify(std::vector<expr_token> &v);
+extern void simplify(sn_reloc &r);
 extern void print(const std::vector<expr_token> &v);
 
 void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segments);
@@ -700,7 +701,7 @@ int main(int argc, char **argv) {
 						e.value = ss.offset;
 					}
 				}
-				simplify(r.expr);
+				simplify(r);
 			}
 		}
 	}
