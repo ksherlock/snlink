@@ -266,14 +266,7 @@ iter skip_local_symbol(iter it, iter end) {
 }
 
 
-/*
 
-1. parse each file into a translation unit.
-2. merge data blocks, update offsets
-3. copy symbols into a symbol map.
-4. resolve relocations
-
-*/
 void parse_unit(const std::string &path, sn_unit &unit) {
 
 	// if (verbose) printf("Linking %s\n", path.c_str());
@@ -475,7 +468,41 @@ extern void print(const std::vector<expr_token> &v);
 
 void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segments);
 
+int set_file_type(const std::string &path, uint16_t file_type, uint32_t aux_type);
 
+
+bool parse_ft(const std::string &s, unsigned &ftype, unsigned &atype) {
+
+	const static struct {
+		const std::string name;
+		unsigned ftype;
+		unsigned atype;
+	} types[] = {
+		{ "cda", 0xb9, 0x0000 },
+		{ "driver", 0xbb, 0x0000 },
+		{ "dvr", 0xbb, 0x0000 },
+		{ "exe", 0xb5, 0x0000 },
+		{ "fst", 0xbd, 0x0000 },
+		{ "ldf", 0xbc, 0x0000 },
+		{ "loadfile", 0xbc, 0x0000 },
+		{ "nda", 0xb8, 0x0000 },
+		{ "pif", 0xb6, 0x0000 },
+		{ "rtl", 0xb4, 0x0000 },
+		{ "s16", 0xb3, 0x0000 },
+		{ "tif", 0xb7, 0x0000 },
+		{ "tol", 0xba, 0x0000 },
+		{ "tool", 0xba, 0x0000 },
+	};
+
+	auto iter = std::lower_bound(std::begin(types), std::end(types), s, [](const auto &e, const std::string &s){
+		return e.name < s;
+	});
+	if (iter == std::end(types)) return false;
+	if (s != iter->name) return false;
+	ftype = iter->ftype;
+	atype = iter->atype;
+	return true;
+}
 
 int main(int argc, char **argv) {
 
@@ -485,11 +512,14 @@ int main(int argc, char **argv) {
 	int ch;
 
 	std::string outfile = "iigs.omf";
-	bool verbose = false;
+
+	unsigned file_type = 0xb3;
+	unsigned aux_type = 0;
 
 	unsigned omf_flags = OMF_V2;
+	bool verbose = false;
 
-	while ((ch = getopt(argc, argv, "o:D:vhX1CS")) != -1) {
+	while ((ch = getopt(argc, argv, "o:D:t:vhX1CS")) != -1) {
 		switch(ch) {
 		case 'v': verbose = true; break;
 		case 'o': outfile = optarg; break;
@@ -498,6 +528,10 @@ int main(int argc, char **argv) {
 		case '1': omf_flags |= OMF_V1; break;
 		case 'C': omf_flags |= OMF_NO_COMPRESS; break;
 		case 'S': omf_flags |= OMF_NO_SUPER; break;
+		case 't':
+			if (!parse_ft(optarg, file_type, aux_type)) {
+				errx(1, "Bad filetype: %s", optarg);
+			}
 		case 'D':
 			// -D key=value
 			break;
@@ -670,6 +704,7 @@ int main(int argc, char **argv) {
 	resolve(units, segments);
 
 	save_omf(outfile, segments, omf_flags);
+	set_file_type(outfile, file_type, aux_type);
 
 	return 0;
 }
