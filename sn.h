@@ -19,6 +19,22 @@ enum {
 	OP_MOD = 0x3e,
 
 	V_CONST = 0x00,
-	V_SYMBOL = 0x02,
+	V_EXTERN = 0x02,
 	V_SECTION = 0x4,
+	V_OMF = 0x10, // synthetic
+};
+
+// relocation flags
+enum {	
+	RELOC_PC_REL_1 = 0x32,
+	RELOC_PC_REL_2 = 0x34,
+
+	RELOC_1 = 0x02,
+	RELOC_2 = 0x1a,
+	RELOC_3 = 0x2c,
+	RELOC_4 = 0x10,
+
+	RELOC_1_WARN = 0x0a,
+	RELOC_2_WARN = 0x1c,
+	RELOC_3_WARN = 0x30,
 };

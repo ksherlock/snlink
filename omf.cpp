@@ -11,7 +11,8 @@
 #include <sysexits.h>
 #include <assert.h>
 
-#include "optional.h"
+// #include "optional.h"
+#include <optional>
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -122,7 +123,7 @@ static void to_little(struct omf_header &h) {
 	}
 }
 
-static void to_little(struct omf_express_header &h) {
+[[maybe_unused]] static void to_little(struct omf_express_header &h) {
 	if (endian::native != endian::little) {
 		swap(h.lconst_mark);
 		swap(h.lconst_size);
@@ -289,7 +290,7 @@ enum {
 
 uint32_t add_relocs(std::vector<uint8_t> &data, size_t data_offset, omf::segment &seg, bool compress, bool super) {
 
-	std::array< optional<super_helper>, 38 > ss;
+	std::array< std::optional<super_helper>, 38 > ss;
 
 
 	uint32_t reloc_size = 0;

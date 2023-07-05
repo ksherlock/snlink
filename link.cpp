@@ -2,7 +2,9 @@
  * SN to OMF Linker.
  *
  */
+#include <algorithm>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <cstring>
@@ -13,7 +15,7 @@
 #include "mapped_file.h"
 #include "link.h"
 #include "sn.h"
-
+#include "omf.h"
 
 typedef mapped_file::iterator iter;
 
@@ -80,6 +82,25 @@ std::string read_pstring(T &iter) {
 	return s;
 }
 
+
+std::vector<uint8_t> &append(std::vector<uint8_t> &v, const std::vector<uint8_t> &w) {
+	v.insert(v.end(), w.begin(), w.end());
+	return v;	
+}
+
+template<class InputIt>
+std::vector<uint8_t> &append(std::vector<uint8_t> &v, InputIt first, InputIt last) {
+	v.insert(v.end(), first, last);
+	return v;
+}
+
+
+template<class A, class B>
+bool contains(std::unordered_map<A, B> &d, const A& k) {
+	return d.find(k) != d.end();
+}
+
+
 // std::unordered_map<std::string, symbol> symbol_table;
 
 
@@ -142,7 +163,7 @@ iter parse_reloc(iter it, iter end, sn_reloc &out) {
 			out.expr.emplace_back(expr_token{op, value});
 			break;
 		case V_SECTION:
-		case V_SYMBOL:
+		case V_EXTERN:
 			if (std::distance(it, end) < 2) throw eof();
 			value = read_16(it);
 			out.expr.emplace_back(expr_token{op, value});
@@ -299,7 +320,7 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 				unsigned size = read_16(it);
 				if (std::distance(it, end) < size)
 					throw eof();
-				current->blocks.insert(current->blocks.end(), it, it + size);
+				append(current->data, it, it + size);
 				it += size;
 				break;
 			}
@@ -435,24 +456,48 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 
 
 int usage(int rv) {
-	fputs("snlink [-v] [-o outputfile] file.obj ...\n", stdout);
+	fputs(
+		"snlink [-v] [-o outputfile] file.obj ...\n"
+		"       -o: specify output file\n"
+		"       -1: OMF Version 1"
+		"       -X: Inhinit Expressload\n"
+		"       -C: Inhibit OMF Compression\n"
+		"       -S: Inhibit OMF Super Records\n"
+
+		, stdout
+	);
 	return rv;
 }
+
+
+extern void simplify(std::vector<expr_token> &v);
+extern void print(const std::vector<expr_token> &v);
+
+void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segments);
+
+
 
 int main(int argc, char **argv) {
 
 	std::vector<sn_unit> units;
+	std::vector<omf::segment> segments;
 
 	int ch;
 
-	std::string outfile;
+	std::string outfile = "iigs.omf";
 	bool verbose = false;
 
-	while ((ch = getopt(argc, argv, "o:D:vh")) != -1) {
+	unsigned omf_flags = OMF_V2;
+
+	while ((ch = getopt(argc, argv, "o:D:vhX1CS")) != -1) {
 		switch(ch) {
 		case 'v': verbose = true; break;
 		case 'o': outfile = optarg; break;
 		case 'h': return usage(0);
+		case 'X': omf_flags |= OMF_NO_EXPRESS; break;
+		case '1': omf_flags |= OMF_V1; break;
+		case 'C': omf_flags |= OMF_NO_COMPRESS; break;
+		case 'S': omf_flags |= OMF_NO_SUPER; break;
 		case 'D':
 			// -D key=value
 			break;
@@ -463,6 +508,7 @@ int main(int argc, char **argv) {
 	argc -= optind;
 	argv += optind;
 
+
 	// 1. load all the files...
 	for (int i = 0; i < argc; ++i) {
 		std::string path(argv[i]);
@@ -470,9 +516,160 @@ int main(int argc, char **argv) {
 		auto &unit = units.emplace_back();
 		parse_unit(path, unit);
 	}
-	// 2. merge segments.
 
-	// 3. resolve relocation records.
+	// check for duplicate symbols?
+
+	unsigned sn = 1;
+	omf::segment &seg = segments.emplace_back();
+	seg.segnum = sn;
+
+
+	#if 0
+	struct group_info {
+		unsigned flags;
+		omf::segment *segment = nullptr;
+	};
+	std::unordered_map<std::string, group_info> groups;
+	#endif
+
+	struct sym_info {
+		uint32_t segnum = 0;
+		uint32_t value = 0;
+	};
+
+	std::unordered_map<std::string, sym_info> symbol_table;
+
+	// simple case - link into 1 segment.
+	for (auto &u : units) {
+		for (auto &s : u.sections) {
+			if (s.bss_size && s.data.size()) {
+				errx(1, "%s: section %s has bss and data",
+					u.filename.c_str(), s.name.c_str()
+				);
+			}
+			if (s.bss_size) continue; // later
+			s.segnum = seg.segnum;
+			s.offset = seg.data.size();
+
+			append(seg.data, s.data);
+
+			// also update the relocations...
+			for (auto &r : s.relocs) {
+				r.address += s.offset;
+			}
+
+		}
+		uint32_t offset = seg.data.size();
+		for (auto &s : u.sections) {
+			if (!s.bss_size) continue;
+			s.segnum = seg.segnum;
+			s.offset = offset;
+			seg.reserved_space += s.bss_size;
+			offset += s.bss_size;
+
+			// also update the relocations...
+			for (auto &r : s.relocs) {
+				r.address += s.offset;
+			}
+		}
+
+		// process the symbols....
+		for (const auto &sym : u.symbols) {
+			const auto &name = sym.name;
+			auto dupe_iter = symbol_table.find(name);
+			auto dupe = dupe_iter != symbol_table.end();
+			// duplicate constants are ok...
+			if (!sym.section_id) {
+
+				if (!dupe) {
+					symbol_table.emplace(name, sym_info{0, sym.value });
+					continue;
+				}
+				const auto &other = dupe_iter->second;
+				if (other.segnum == 0 && other.value == sym.value)
+					continue;
+			}
+			if (dupe) {
+				warnx("%s: Duplicate symbol %s",
+					u.filename.c_str(), name.c_str()
+				);
+				continue;
+			}
+
+			auto iter = std::find_if(u.sections.begin(), u.sections.end(),[&sym](const auto &s){
+				return s.section_id == sym.section_id;
+			});
+
+			if (iter == u.sections.end()) {
+				errx(1, "%s: %s Unable to find section %u",
+					u.filename.c_str(), name.c_str(), sym.section_id
+				);
+			}
+
+			symbol_table.emplace(name, sym_info{ iter->segnum, iter->offset + sym.value });
+		}
+	}
+
+	// now update the relocation expressions
+	// and replace extern/section references with OMF segments.
+	for (auto &u : units) {
+		for (auto &s : u.sections) {
+			for (auto &r : s.relocs) {
+				for (auto &e : r.expr) {
+					if (e.op == V_EXTERN) {
+						// extern symbol.
+
+						auto iter1 = std::find_if(u.externs.begin(), u.externs.end(), [&e](const auto &x){
+							return x.symbol_id == e.value;
+						});
+						if (iter1 == u.externs.end()) {
+							errx(1, "%s: %s: Unable to find symbol %u",
+								u.filename.c_str(), s.name.c_str(), e.value
+							);
+						}
+
+						auto iter2 = symbol_table.find(iter1->name);
+						if (iter2 == symbol_table.end()) {
+							errx(1, "%s: %s Unable to find extern symbol %s",
+								u.filename.c_str(), s.name.c_str(), iter1->name.c_str()
+							);
+						}
+						const auto &si = iter2->second;
+
+						e.value = si.value;
+						// could be a EQU
+						if (si.segnum == 0) {
+							e.op = V_CONST;
+						} else {
+							e.op = (si.segnum << 8) | V_OMF;
+						}
+					}
+					if (e.op == V_SECTION) {
+						// internal section reference.
+
+						auto iter = std::find_if(u.sections.begin(), u.sections.end(), [&e](const auto &x){
+							return x.section_id == e.value;
+						});
+						if (iter == u.sections.end()) {
+							errx(1, "%s: %s: Unable to find section %u",
+								u.filename.c_str(), s.name.c_str(), e.value
+							);
+						}
+
+						const auto &ss = *iter;
+
+						e.op = (ss.segnum << 8) | V_OMF;
+						e.value = ss.offset;
+					}
+				}
+				simplify(r.expr);
+			}
+		}
+	}
+
+	resolve(units, segments);
+
+	save_omf(outfile, segments, omf_flags);
 
 	return 0;
 }

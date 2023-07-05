@@ -41,8 +41,12 @@ struct sn_section {
 	unsigned flags = 0; // unknown meaning.
 
 	unsigned bss_size = 0;
-	std::vector<uint8_t> blocks;
+	std::vector<uint8_t> data;
 	std::vector<sn_reloc> relocs;
+
+	// omf-data
+	unsigned segnum = 0;
+	uint32_t offset = 0;
 };
 
 struct sn_unit {
