@@ -365,6 +365,23 @@ void resolve(const sn_section &s, omf::segment &seg) {
 }
 #endif
 
+void print_reloc_info(const sn_unit &unit, const sn_section &section, const sn_reloc &reloc) {
+
+	printf("%s:%s:%04x\n", unit.filename.c_str(), section.name.c_str(), reloc.address - section.offset);
+
+	if (reloc.file_id) {
+		// can print object file + offset ... but i need to retain the original
+		// offset -- sn_reloc has been updated.
+		auto iter = std::find_if(unit.files.begin(), unit.files.end(), [=](const auto &f){
+			return f.file_id == reloc.file_id;
+		});
+		if (iter != unit.files.end())
+			printf("%s:%u\n", iter->name.c_str(), reloc.line);
+	}
+
+	print(reloc.expr);
+}
+
 void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segments) {
 
 	for (const auto &u : units) {
@@ -408,7 +425,7 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 
 					case RELOC_3_WARN:	
 						check = true;
-						size = 2;
+						size = 3;
 						break;
 					default:
 						errx(1, "Bad relocation type %02x", r.type);
@@ -423,14 +440,17 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 					uint32_t address = r.address;
 
 					if (pcrel) {
+						print_reloc_info(u, s, r);
 						warnx("PC-relative constant");
 					}
 
 					if (check && (size < 4) && value > (1 << (8 * size))) {
+						print_reloc_info(u, s, r);
 						warnx("Value overflow");
 					}
 
 					if (seg.data.size() < address + size) {
+						print_reloc_info(u, s, r);
 						errx(1, "Bad relocation address");
 					}
 					while (size--) {
@@ -502,6 +522,7 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 
 					if (a.op == OP_SUB && b.op == OP_AND && is_const(c.op) && c.value == 0xff0000 && is_omf(d.op) && is_omf(e.op)) {
 						if (d.op != e.op) {
+							print_reloc_info(u, s, r);
 							warnx("Out-of-bank-reference");
 						}
 						is.shift = 0;
@@ -513,7 +534,7 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 				}
 
 				if (!ok) {
-					print(r.expr);
+					print_reloc_info(u, s, r);
 					errx(1, "relocation expression too complex.");
 				}
 
@@ -527,12 +548,14 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 
 						if (size == 1) {
 							 if (delta > 127 || delta < -128) {
+								print_reloc_info(u, s, r);
 								warnx("PC-relative branch out of range");
 								continue;
 							}
 						}
 
 						if (seg.data.size() < address + size) {
+							print_reloc_info(u, s, r);
 							errx(1, "Bad relocation address");
 						}
 						while (size--) {
@@ -542,6 +565,7 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 						continue;
 					}
 
+					print_reloc_info(u, s, r);
 					warnx("PC-relative reloc not supported");
 					continue;
 				}
