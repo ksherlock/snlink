@@ -450,9 +450,11 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 
 int usage(int rv) {
 	fputs(
-		"snlink [-v] [-o outputfile] file.obj ...\n"
+		"snlink [-v1XCS] [-o outputfile] [-t type] file.obj ...\n"
+		"       -v: be verbose\n"
 		"       -o: specify output file\n"
-		"       -1: OMF Version 1"
+		"       -t: specify output file type\n"
+		"       -1: OMF Version 1\n"
 		"       -X: Inhinit Expressload\n"
 		"       -C: Inhibit OMF Compression\n"
 		"       -S: Inhibit OMF Super Records\n"
@@ -541,6 +543,8 @@ int main(int argc, char **argv) {
 
 	argc -= optind;
 	argv += optind;
+
+	if (argc == 0) usage(0);
 
 
 	// 1. load all the files...
