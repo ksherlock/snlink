@@ -706,5 +706,12 @@ int main(int argc, char **argv) {
 	save_omf(outfile, segments, omf_flags);
 	set_file_type(outfile, file_type, aux_type);
 
+	if (verbose) {
+		// print the symbol table.
+		for (auto &kv : symbol_table) {
+			printf("%-20s %02x/%04x\n", kv.first.c_str(), kv.second.segnum, kv.second.value);
+		}
+	}
+
 	return 0;
 }
