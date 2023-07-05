@@ -15,3 +15,9 @@ jobs:
         submodules: true
     - name: make
       run: make all
+
+    - name: Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries - ${{ matrix.os }}
+        path: "snlink"
