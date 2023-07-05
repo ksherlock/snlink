@@ -473,7 +473,7 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 					const auto &b = r.expr[1];
 					const auto &c = r.expr[2];
 					const auto &d = r.expr[3];
-					const auto &e = r.expr[2];
+					const auto &e = r.expr[4];
 
 					if (a.op == OP_SUB && b.op == OP_AND && is_const(c.op) && c.value == 0xff0000 && is_omf(d.op) && is_omf(e.op)) {
 						if (d.op != e.op) {
