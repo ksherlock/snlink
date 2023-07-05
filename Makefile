@@ -18,6 +18,14 @@ ifeq ($(MSYSTEM),MINGW64)
 	LDLIBS += -static
 endif
 
+.PHONY: all
+all: snlink
+
+.PHONY: clean
+clean:
+	$(RM) snlink $(LINK_OBJS)
+
+
 
 
 snlink: $(LINK_OBJS)
