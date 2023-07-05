@@ -330,6 +330,7 @@ uint32_t add_relocs(std::vector<uint8_t> &data, size_t data_offset, omf::segment
 				}
 
 				// if size == 2 && shift == -16, -> SUPER INTERSEG 
+				// but should we interseg if it's the same segment???
 				if (seg.segnum <= 12 && r.shift == 0xf0 && r.size == 2) {
 
 					int n = SUPER_INTERSEG24 + seg.segnum;

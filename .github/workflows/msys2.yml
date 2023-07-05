@@ -1,0 +1,32 @@
+name: MSYS2 build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    strategy:
+      matrix:
+        msys: [MSYS, MINGW32, MINGW64]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Setup MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          path-type: strict
+          msystem: ${{ matrix.msys }}
+          install: make gcc mingw32/mingw-w64-i686-gcc mingw64/mingw-w64-x86_64-gcc
+
+      # Runs a single command using the runners shell
+      - name: Make ${{ matrix.msys }}
+        run: msys2 -c 'make'
+
+      - name: Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: binaries - ${{ matrix.msys }}
+          path: "*.exe"
