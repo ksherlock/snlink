@@ -455,7 +455,7 @@ int usage(int rv) {
 		"       -o: specify output file\n"
 		"       -t: specify output file type\n"
 		"       -1: OMF Version 1\n"
-		"       -X: Inhinit Expressload\n"
+		"       -X: Inhibit Expressload\n"
 		"       -C: Inhibit OMF Compression\n"
 		"       -S: Inhibit OMF Super Records\n"
 
