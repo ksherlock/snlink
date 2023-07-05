@@ -119,6 +119,14 @@ inline std::runtime_error eof(void) {
 	return std::runtime_error("Unexpected EOF");
 }
 
+inline std::runtime_error bad_opcode(std::string msg, unsigned opcode) {
+	char buffer[16];
+	snprintf(buffer, sizeof(buffer), ": $%02x", opcode & 0xff);
+
+	msg.append(buffer);
+	return std::runtime_error(msg);
+}
+
 iter parse_reloc(iter it, iter end, sn_reloc &out) {
 
 	unsigned tokens = 1;
@@ -169,14 +177,8 @@ iter parse_reloc(iter it, iter end, sn_reloc &out) {
 			out.expr.emplace_back(expr_token{op, value});
 			break;
 
-		default: {
-			char buffer[16];
-			snprintf(buffer, sizeof(buffer), "$%02x", op);
-			std::string tmp("unknown relocation expression opcode: ");
-			tmp += buffer;
-			throw std::runtime_error(tmp);
-			break;
-		}
+		default:
+			throw bad_opcode("Unknown relocation expression opcode", op);
 		}
 	}
 	return it;
@@ -432,7 +434,7 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 				it = skip_local_symbol(it, end);
 				break;
 			default:
-				throw std::runtime_error("Unknown segment: ");
+				throw bad_opcode("Unknown opcode", op);
 
 			}
 
