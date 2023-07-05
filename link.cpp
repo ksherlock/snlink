@@ -335,7 +335,7 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 				break;
 			}
 			case 0x08: {
-				// bss reserved data.
+				// ds reserved space.
 				if (!current)
 					throw std::runtime_error("No active section");
 
@@ -343,7 +343,8 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 					throw eof();
 
 				uint32_t size = read_32(it);
-				current->bss_size += size;
+				current->data.resize(current->data.size() + size, 0x00);
+				// current->bss_size += size;
 				break;
 			}
 			case 0x0a: {
@@ -357,7 +358,7 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 				break;
 			}
 			case 0x0c: {
-				// symbol.
+				// global symbol.
 				auto &symbol = unit.symbols.emplace_back();
 				it = parse_global_symbol(it, end, symbol);
 				break;
@@ -388,10 +389,8 @@ void parse_unit(const std::string &path, sn_unit &unit) {
 				break;
 			}
 			case 0x12: {
-				// bss? - these are local so skip
-				// sn_symbol symbol;
-				// it = parse_bss_symbol(it, end, symbol);
-				// unit.symbols.emplace_back(std::move(symbol));
+				// non-global symbol (included with /g)
+				// TODO -- parse and print later (with -v) for debugging purposes.
 				it = skip_local_symbol(it, end);
 				break;
 			}
