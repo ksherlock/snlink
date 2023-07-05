@@ -175,6 +175,7 @@ void simplify(std::vector<expr_token> &v) {
 	v = std::move(out);
 }
 
+#if 0
 void resolve(const sn_section &s, omf::segment &seg) {
 
 	for (const auto &r : s.relocs) {
@@ -321,7 +322,30 @@ void resolve(const sn_section &s, omf::segment &seg) {
 			errx(1, "relocation expression too complex.");
 		}
 		if (pcrel) {
+
+			uint32_t address = r.address;
+			if (is.shift == 0 && is.segment == s.segnum) {
+
+				int32_t delta = is.segment_offset - is.offset;
+				if (size == 1) {
+					 if (delta > 127 || delta < -128) {
+						warnx("PC-relative branch out of range");
+						continue;
+					}
+				}
+
+				if (seg.data.size() < address + size) {
+					errx(1, "Bad relocation address");
+				}
+				while (size--) {
+					seg.data[address++] = delta & 0xff;
+					delta >>= 8;
+				}
+				continue;
+			}
+
 			warnx("PC-relative reloc not supported");
+			continue;
 		}
 
 		// TODO -- can we do any size checks here?
@@ -339,6 +363,7 @@ void resolve(const sn_section &s, omf::segment &seg) {
 		}
 	}
 }
+#endif
 
 void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segments) {
 
@@ -491,8 +516,34 @@ void resolve(const std::vector<sn_unit> &units, std::vector<omf::segment> &segme
 					print(r.expr);
 					errx(1, "relocation expression too complex.");
 				}
+
 				if (pcrel) {
+
+					uint32_t address = r.address;
+					if (is.shift == 0 && is.segment == s.segnum) {
+
+						int32_t delta = is.segment_offset - is.offset;
+						delta -= size;
+
+						if (size == 1) {
+							 if (delta > 127 || delta < -128) {
+								warnx("PC-relative branch out of range");
+								continue;
+							}
+						}
+
+						if (seg.data.size() < address + size) {
+							errx(1, "Bad relocation address");
+						}
+						while (size--) {
+							seg.data[address++] = delta & 0xff;
+							delta >>= 8;
+						}
+						continue;
+					}
+
 					warnx("PC-relative reloc not supported");
+					continue;
 				}
 
 				// TODO -- can we do any size checks here?
