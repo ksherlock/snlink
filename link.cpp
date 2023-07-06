@@ -246,6 +246,7 @@ int main(int argc, char **argv) {
 			if (!parse_ft(optarg, file_type, aux_type)) {
 				errx(1, "Bad filetype: %s", optarg);
 			}
+			break;
 		case 'D':
 			// -D key=value
 			add_define(optarg);
