@@ -4,7 +4,6 @@
 
 #include <err.h>
 
-#include "link.h"
 #include "sn.h"
 #include "omf.h"
 
