@@ -20,4 +20,4 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: binaries - ${{ matrix.os }}
-        path: "snlink"
+        path: "sn-link"
