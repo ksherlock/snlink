@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
 			break;
 
 		case 'A': flag_A = true; break;
-		case 'f': flag_f = true; break;
+		case 'f': flag_f = true; break; // full output -- also include sections????
 		case 'P': flag_P = true; break;
 		case 'p': flag_p = true; break;
 		case 'S': flag_S = true; break;
@@ -164,11 +164,35 @@ int main(int argc, char **argv) {
 		}
 
 		// todo -- proper output
-		printf("%s\n", argv[i]);
+		if (!flag_A) printf("\n%s:\n", argv[i]);
 		for (const auto &e : syms) {
-			if (e.type == 'U') fputs("        ", stdout);
-			else printf("%08x", e.value);
-			printf(" %c %s\n", e.type, e.name.c_str());
+
+			char value_str[32];
+
+			switch(flag_t) {
+			case 'o':
+				snprintf(value_str, sizeof(value_str), "%010o", e.value);
+				break;
+			case 'd':
+				snprintf(value_str, sizeof(value_str), "%010u", e.value);
+				break;
+			case 'x':
+			default:
+				snprintf(value_str, sizeof(value_str), "%010x", e.value);
+				break;
+			}
+
+			if (flag_A) printf("%s: ", argv[i]);
+
+			if (flag_P) {
+				printf("%s %c", e.name.c_str(), e.type);
+				if (e.type != 'U') printf(" %s", value_str);
+				fputs("\n", stdout);
+			} else {
+
+				fputs(e.type == 'U' ? "        " : value_str, stdout);
+				printf(" %c %s\n", e.type, e.name.c_str());
+			}
 		}
 	}
 
