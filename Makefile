@@ -9,6 +9,7 @@ NM_OBJS = nm.o sn.o mapped_file.o
 # also add mingw directory.
 ifeq ($(MSYSTEM),MINGW32)
 	LINK_OBJS += mingw/err.o
+	NM_OBJS += mingw/err.o
 	CPPFLAGS += -I mingw/
 	LDLIBS += -static
 endif
