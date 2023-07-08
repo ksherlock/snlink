@@ -16,6 +16,7 @@ endif
 
 ifeq ($(MSYSTEM),MINGW64)
 	LINK_OBJS += mingw/err.o
+	NM_OBJS += mingw/err.o
 	CPPFLAGS += -I mingw/
 	LDLIBS += -static
 endif
