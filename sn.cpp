@@ -420,6 +420,18 @@ void sn_parse_unit(const std::string &path, sn_unit &unit) {
 				// local symbol record.
 				it = skip_local_symbol(it, end);
 				break;
+
+			case 0x2a: // 32-bit regs?
+			case 0x18: // 16-bit regs?
+			case 0x16: // 8-bit regs?
+				// regs pc=$12345678, etc
+				// uint8_t unknown, uint32_t value, uint8_t register, uint8_t unknown.
+				// register mapping: 00=a; 02=x; 04=y; 06=s;08=pc;0b=p;0c=d;0e=db
+				if (std::distance(it, end) < 7)
+					throw eof();
+				it += 7;
+				break;
+
 			default:
 				throw bad_opcode("Unknown opcode", op);
 
