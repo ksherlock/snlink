@@ -20,4 +20,6 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: binaries - ${{ matrix.os }}
-        path: sn-link sn-nm
+        path: |
+          sn-link
+          sn-nm
