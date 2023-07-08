@@ -75,7 +75,7 @@ std::string read_pstring(T &iter) {
 }
 
 
-static std::vector<uint8_t> &append(std::vector<uint8_t> &v, const std::vector<uint8_t> &w) {
+[[maybe_unused]] static std::vector<uint8_t> &append(std::vector<uint8_t> &v, const std::vector<uint8_t> &w) {
 	v.insert(v.end(), w.begin(), w.end());
 	return v;	
 }
@@ -218,13 +218,11 @@ iter parse_global_symbol(iter it, iter end, sn_symbol &symbol) {
 	return it;
 }
 
-iter parse_bss_symbol(iter it, iter end, sn_symbol &symbol) {
-
-	// no section
+iter parse_local_symbol(iter it, iter end, sn_symbol &symbol) {
 
 	if (std::distance(it, end) < 7)  throw eof();
-	symbol.symbol_id = read_16(it);
-	symbol.section_id = -1;
+	symbol.symbol_id = 0;
+	symbol.section_id = read_16(it);
 	symbol.value = read_32(it);
 
 	unsigned l = *it;
@@ -348,19 +346,25 @@ void sn_parse_unit(const std::string &path, sn_unit &unit) {
 			}
 			case 0x0c: {
 				// global symbol.
-				auto &symbol = unit.symbols.emplace_back();
+				auto &symbol = unit.globals.emplace_back();
 				it = parse_global_symbol(it, end, symbol);
 				break;
 			}
 			case 0x0e: {
 				// extern symbol
-				if (!current)
-					throw std::runtime_error("No active section");
-
 				auto &symbol = unit.externs.emplace_back();
 				it = parse_extern_symbol(it, end, symbol);
 				break;
 			}
+
+			case 0x12: {
+				// non-global symbol (included with /g)
+				auto &symbol = unit.locals.emplace_back();
+				it = parse_local_symbol(it, end, symbol);
+				// it = skip_local_symbol(it, end);
+				break;
+			}
+
 			case 0x10: {
 				auto &section = unit.sections.emplace_back();
 				it = parse_section(it, end, section);
@@ -377,12 +381,7 @@ void sn_parse_unit(const std::string &path, sn_unit &unit) {
 				}
 				break;
 			}
-			case 0x12: {
-				// non-global symbol (included with /g)
-				// TODO -- parse and print later (with -v) for debugging purposes.
-				it = skip_local_symbol(it, end);
-				break;
-			}
+
 			case 0x14: {
 				auto &group = unit.groups.emplace_back();
 				it = parse_group(it, end, group);

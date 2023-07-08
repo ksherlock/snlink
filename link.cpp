@@ -319,7 +319,7 @@ int main(int argc, char **argv) {
 		}
 
 		// process the symbols....
-		for (const auto &sym : u.symbols) {
+		for (const auto &sym : u.globals) {
 			const auto &name = sym.name;
 			auto dupe_iter = symbol_table.find(name);
 			auto dupe = dupe_iter != symbol_table.end();

@@ -54,7 +54,8 @@ struct sn_unit {
 	std::vector<sn_section> sections;
 	std::vector<sn_group> groups;
 	std::vector<sn_file> files;
-	std::vector<sn_symbol> symbols;
+	std::vector<sn_symbol> locals;
+	std::vector<sn_symbol> globals;
 	std::vector<sn_symbol> externs;
 };
 

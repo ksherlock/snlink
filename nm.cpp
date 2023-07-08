@@ -127,16 +127,29 @@ int main(int argc, char **argv) {
 
 		// incorporate group/section info for local/global symbols???
 
-		for (const auto &e : u.symbols) {
-			unsigned type = 'T'; // global text
-			if (e.section_id == 0) type = 'A'; // global absolute
+		if (include_local) {
+			for (const auto &e : u.locals) {
+				unsigned type = 't'; // local text
+				if (e.section_id == 0) type = 'a'; // local absolute
 
-			syms.push_back(xsym{e.name, e.value, type});
+				syms.push_back(xsym{e.name, e.value, type});
+			}
+		}
+
+		if (include_global) {
+			for (const auto &e : u.globals) {
+				unsigned type = 'T'; // global text
+				if (e.section_id == 0) type = 'A'; // global absolute
+
+				syms.push_back(xsym{e.name, e.value, type});
+			}
 		}
 
 
-		for (const auto &e : u.externs) {
-			syms.push_back(xsym{e.name, 0, 'U'});
+		if (include_extern) {
+			for (const auto &e : u.externs) {
+				syms.push_back(xsym{e.name, 0, 'U'});
+			}
 		}
 
 		// sort...
