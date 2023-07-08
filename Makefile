@@ -26,7 +26,7 @@ all: sn-link sn-nm
 
 .PHONY: clean
 clean:
-	$(RM) sn-link sn-asm $(LINK_OBJS) $(NM_OBJS)
+	$(RM) sn-link sn-nm $(LINK_OBJS) $(NM_OBJS)
 	$(MAKE) -C afp clean
 
 sn-link: $(LINK_OBJS)
