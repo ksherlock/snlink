@@ -75,6 +75,9 @@ void print(const std::vector<expr_token> &v) {
 	printf("\n");
 }
 
+
+static inline uint32_t sn_bool(bool tf) { return tf ? 0xffffffff : 0; }
+
 void simplify(std::vector<expr_token> &v) {
 
 
@@ -98,12 +101,12 @@ void simplify(std::vector<expr_token> &v) {
 		if (is_const(a.op) && is_const(b.op)) {
 			uint32_t value = 0;
 			switch(e.op) {
-				case OP_EQ: value = a.value == b.value; break;
-				case OP_NE: value = a.value != b.value; break;
-				case OP_LE: value = a.value <= b.value; break;
-				case OP_LT: value = a.value < b.value; break;
-				case OP_GE: value = a.value >= b.value; break;
-				case OP_GT: value = a.value > b.value; break;
+				case OP_EQ: value = sn_bool(a.value == b.value); break;
+				case OP_NE: value = sn_bool(a.value != b.value); break;
+				case OP_LE: value = sn_bool(a.value <= b.value); break;
+				case OP_LT: value = sn_bool(a.value < b.value); break;
+				case OP_GE: value = sn_bool(a.value >= b.value); break;
+				case OP_GT: value = sn_bool(a.value > b.value); break;
 				case OP_ADD: value = a.value + b.value; break;
 				case OP_SUB: value = a.value - b.value; break;
 				case OP_MUL: value = a.value * b.value; break;
@@ -115,11 +118,11 @@ void simplify(std::vector<expr_token> &v) {
 
 				case OP_DIV: 
 					if (b.value == 0) value = 0;
-					else value = a.value / b.value;
+					else value = (int32_t)a.value / (int32_t)b.value;
 					break;
 				case OP_MOD:
 					if (b.value == 0) value = 0;
-					else value = a.value % b.value;
+					else value = std::abs((int32_t)a.value % (int32_t)b.value);
 					break;
 			}
 
