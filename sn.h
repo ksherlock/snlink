@@ -85,7 +85,7 @@ enum {
 	V_EXTERN = 0x02,
 	V_SECTION = 0x4,
 	V_FN_SECT = 0x0c,
-	V_FN_GRP_ORG = 0x14
+	V_FN_GROUP_ORG = 0x14,
 };
 
 // relocation flags
