@@ -389,7 +389,9 @@ int main(int argc, char **argv) {
 							e.op = (si.segnum << 8) | V_OMF;
 						}
 					}
-					if (e.op == V_SECTION) {
+					if (e.op == V_SECTION || e.op == V_FN_SECT) {
+						// SECT() returns the base address of a section. (how is this different from a section reference???)
+
 						// internal section reference.
 
 						auto iter = std::find_if(u.sections.begin(), u.sections.end(), [&e](const auto &x){
@@ -405,6 +407,10 @@ int main(int argc, char **argv) {
 
 						e.op = (ss.segnum << 8) | V_OMF;
 						e.value = ss.offset;
+					}
+					if (e.op == V_FN_GROUP_ORG) {
+						// todo... once groups are supported.
+
 					}
 				}
 				simplify(r);

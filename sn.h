@@ -79,10 +79,13 @@ enum {
 	OP_RSHIFT = 0x3c,
 	OP_MOD = 0x3e,
 
+	V_OMF = 0x01, // synthetic
+
 	V_CONST = 0x00,
 	V_EXTERN = 0x02,
 	V_SECTION = 0x4,
-	V_OMF = 0x10, // synthetic
+	V_FN_SECT = 0x0c,
+	V_FN_GRP_ORG = 0x14
 };
 
 // relocation flags
