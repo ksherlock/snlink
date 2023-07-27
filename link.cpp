@@ -226,7 +226,7 @@ void print_segments(std::vector<omf::segment> &segments) {
 
 	fputs("Segments:\n", stdout);
 	for (auto &seg : segments) {
-		printf("%u (%-10s): $%06x\n", seg.segnum, seg.loadname.c_str(), (uint32_t)seg.data.size());
+		printf("%u (%-12s): $%06x\n", seg.segnum, seg.segname.c_str(), (uint32_t)seg.data.size());
 	}
 }
 
@@ -321,7 +321,7 @@ std::vector<omf::segment> link_it(std::vector<sn_unit> &units, int type) {
 			// 1 segment per group
 			seg = &rv.emplace_back();
 			seg->segnum = rv.size();
-			seg->loadname = gname;
+			seg->segname = gname;
 			// set attributes based on name?
 		}
 
@@ -335,7 +335,7 @@ std::vector<omf::segment> link_it(std::vector<sn_unit> &units, int type) {
 				// 1 section per segment.
 				seg = &rv.emplace_back();
 				seg->segnum = rv.size();
-				seg->loadname = sname;
+				seg->segname = sname;
 				// set attributes based on name?
 			}
 
