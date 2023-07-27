@@ -50,9 +50,12 @@ static std::vector<uint8_t> &append(std::vector<uint8_t> &v, InputIt first, Inpu
 	return v;
 }
 
-
-
-
+#if 0
+template<class Input, class UnaryPredicate>
+Input::iterator find_if(Input &&input, UnaryPredicate p) {
+	return std::find_if(input.begin(), input.end(), p);
+}
+#endif
 
 /* older std libraries lack charconv and std::from_chars */
 static bool parse_number(const char *begin, const char *end, uint32_t &value, int base = 10) {
@@ -76,7 +79,7 @@ static bool parse_number(const char *begin, const char *end, uint32_t &value, in
 
 int usage(int rv) {
 	fputs(
-		"snlink [-v1XCS] [-o outputfile] [-t type] [-D name=value] file.obj ...\n"
+		"snlink [-v1XCS] [-o outputfile] [-t type] [-D name=value] [-l 0|1|2] file.obj ...\n"
 		"       -v: be verbose\n"
 		"       -o: specify output file\n"
 		"       -t: specify output file type\n"
@@ -85,6 +88,7 @@ int usage(int rv) {
 		"       -C: Inhibit OMF Compression\n"
 		"       -S: Inhibit OMF Super Records\n"
 		"       -D: define an equate\n"
+		"       -l: link type\n"
 
 		, stdout
 	);
@@ -218,6 +222,257 @@ void print_symbols() {
 
 }
 
+void print_segments(std::vector<omf::segment> &segments) {
+
+	fputs("Segments:\n", stdout);
+	for (auto &seg : segments) {
+		printf("%u (%-10s): $%06x\n", seg.segnum, seg.loadname.c_str(), (uint32_t)seg.data.size());
+	}
+}
+
+std::vector<std::string> collect_groups(std::vector<sn_unit> &units) {
+
+	std::vector<std::string> rv;
+
+	// check for empty...
+	bool has_empty = false;
+	for (auto &u : units) {
+		for (auto &s : u.sections) {
+			if (s.group_id) continue;
+			rv.emplace_back();
+			has_empty = true;
+			break;
+		}
+		if (has_empty) break;
+	}
+
+	for (auto &u : units) {
+		for (auto &g : u.groups) {
+			if (std::find(rv.begin(), rv.end(), g.name) == rv.end())
+				rv.emplace_back(g.name);
+		}
+	}
+	return rv;
+}
+
+std::vector<std::string> collect_sections(std::vector<sn_unit> &units, const std::string &group_name) {
+
+	std::vector<std::string> rv;
+
+	for (auto &u : units) {
+		unsigned group_id = 0;
+		if (!group_name.empty()) {
+			auto g = u.find_group(group_name);
+			if (!g) continue;
+			group_id = g->group_id;
+		}
+
+		for (auto &s : u.sections) {
+			if (s.group_id != group_id) continue;
+			if (std::find(rv.begin(), rv.end(), s.name) == rv.end())
+				rv.emplace_back(s.name);
+		}
+	}
+	return rv;
+}
+
+template<>
+struct std::hash< std::pair<std::string, std::string> > {
+	std::size_t operator()(std::pair<std::string, std::string> const &s ) const noexcept {
+		auto s1 = std::hash<std::string>{}(s.first);
+		auto s2 = std::hash<std::string>{}(s.second);
+		return s1 ^ s2;
+	}
+};
+
+// link types -
+// 0: 1 segment for everything
+// 1: 1 segment per group
+// 2: 1 segment per section (group/groupend might not work)
+std::vector<omf::segment> link_it(std::vector<sn_unit> &units, int type) {
+
+
+	typedef std::pair<std::string, std::string> key;
+	struct value {
+		unsigned segnum = 0;
+		uint32_t start = 0;
+		uint32_t end = 0;
+	};
+
+	std::unordered_map<key, value> dict;
+
+
+	std::vector<omf::segment> rv;
+
+	omf::segment * seg;
+	if (type == 0) {
+		// 1 segment
+		seg = &rv.emplace_back();
+		seg->segnum = 1;
+	}
+
+
+	auto groups = collect_groups(units);
+	for (auto gname : groups) {
+
+		auto sections = collect_sections(units, gname);
+
+		if (type == 1) {
+			// 1 segment per group
+			seg = &rv.emplace_back();
+			seg->segnum = rv.size();
+			seg->loadname = gname;
+			// set attributes based on name?
+		}
+
+
+		uint32_t group_offset = seg->data.size();
+
+		for (auto &sname : sections) {
+
+
+			if (type == 2) {
+				// 1 section per segment.
+				seg = &rv.emplace_back();
+				seg->segnum = rv.size();
+				seg->loadname = sname;
+				// set attributes based on name?
+			}
+
+			uint32_t section_offset = seg->data.size();
+
+			for (auto &u : units) {
+
+				unsigned group_id = 0;
+				if (!gname.empty()) {
+					auto gg = u.find_group(gname);
+					if (!gg) continue;
+					group_id = gg->group_id;
+				}
+
+
+				for (auto &s : u.sections) {
+					if (s.group_id != group_id) continue;
+					if (s.name != sname) continue;
+
+					s.segnum = seg->segnum;
+					s.offset = seg->data.size();
+
+					append(seg->data, s.data);
+
+					// also update the relocations...
+					for (auto &r : s.relocs) {
+						r.address += s.offset;
+					}
+				}
+			}
+
+
+			auto k = std::make_pair(gname, sname);
+			auto v = value { seg->segnum, section_offset, (uint32_t)seg->data.size() };
+
+			dict.emplace(k, v);
+		}
+
+		// type 2 can't do group/groupend() ... unless it's 1-section
+		if (type == 2 && sections.size() == 1) {
+			auto k = std::make_pair(gname, "");
+			auto v = value { seg->segnum, 0, (uint32_t)seg->data.size() };
+			dict.emplace(k, v);			
+		}
+		if (type != 2) {
+			auto k = std::make_pair(gname, "");
+			auto v = value { seg->segnum, group_offset, (uint32_t)seg->data.size() };
+			dict.emplace(k, v);
+		}
+	}
+
+
+	// now process all the relocation records for group() / groupend() / sect() / sectend()
+
+	for (auto &u : units) {
+		for (auto &s : u.sections) {
+			for (auto &r : s.relocs) {
+				for (auto &e : r.expr) {
+					if (e.op == V_SECTION) {
+						// internal section reference.
+
+						auto ss = u.find_section(e.value);
+
+						if (!ss) {
+							errx(1, "%s: %s: Unable to find section %u",
+								u.filename.c_str(), s.name.c_str(), e.value
+							);
+						}
+
+						e.op = (ss->segnum << 8) | V_OMF;
+						e.value = ss->offset;
+					}
+
+					if (e.op == V_FN_SECT || e.op == V_FN_SECT_END) {
+						auto ss = u.find_section(e.value);
+						if (!ss) {
+							errx(1, "%s: %s: Unable to find section %u",
+								u.filename.c_str(), s.name.c_str(), e.value
+							);
+						}
+
+						auto gg = ss->group_id ? u.find_group(ss->group_id) : nullptr;
+						if (ss->group_id && !gg) {
+							errx(1, "%s: %s: Unable to find group %s",
+								u.filename.c_str(), s.name.c_str(), gg->name.c_str()
+							);				
+						}
+
+						auto k = std::make_pair(gg ? gg->name : "", ss->name);
+						auto iter = dict.find(k);
+						if (iter == dict.end()) {
+							errx(1, "%s: %s: Unable to find %s:%s",
+								u.filename.c_str(), s.name.c_str(), gg->name.c_str(), s.name.c_str()
+							);
+						}
+						const auto &v = iter->second;
+						e.op = (v.segnum << 8) | V_OMF;
+						e.value = e.op == V_FN_SECT ? v.start : v.end;
+						continue;
+					}
+
+					if (e.op == V_FN_GROUP || e.op == V_FN_GROUP_END) {
+
+						#if 0
+						if (type == 2) {
+							errx(1, "group() and groupend() not supported with section-based segments")
+						}
+						#endif
+
+						auto gg = u.find_group(e.value);
+						if (!gg) {
+							errx(1, "%s: %s: Unable to find group %u",
+								u.filename.c_str(), s.name.c_str(), e.value
+							);
+						}
+
+						auto k = std::make_pair(gg->name, std::string());
+						auto iter = dict.find(k);
+						if (iter == dict.end()) {
+							errx(1, "%s: %s: Unable to find group %s",
+								u.filename.c_str(), s.name.c_str(), gg->name.c_str()
+							);
+						}
+						const auto &v = iter->second;
+						e.op = (v.segnum << 8) | V_OMF;
+						e.value = e.op == V_FN_GROUP ? v.start : v.end;
+						continue;
+					}
+				}
+			}
+		}
+	}
+
+
+	return rv;
+}
+
 int main(int argc, char **argv) {
 
 	std::vector<sn_unit> units;
@@ -229,11 +484,12 @@ int main(int argc, char **argv) {
 
 	unsigned file_type = 0xb3;
 	unsigned aux_type = 0;
+	unsigned link_type = 1;
 
 	unsigned omf_flags = OMF_V2;
 	bool verbose = false;
 
-	while ((ch = getopt(argc, argv, "o:D:t:vhX1CS")) != -1) {
+	while ((ch = getopt(argc, argv, "o:D:t:vhX1CSl:")) != -1) {
 		switch(ch) {
 		case 'v': verbose = true; break;
 		case 'o': outfile = optarg; break;
@@ -246,6 +502,12 @@ int main(int argc, char **argv) {
 			if (!parse_ft(optarg, file_type, aux_type)) {
 				errx(1, "Bad filetype: %s", optarg);
 			}
+			break;
+		case 'l': 
+			if (*optarg >= '0' && *optarg <= '2')
+				link_type = *optarg - '0';
+			else
+				errx(1, "Bad link type: %s", optarg);
 			break;
 		case 'D':
 			// -D key=value
@@ -261,7 +523,7 @@ int main(int argc, char **argv) {
 	if (argc == 0) usage(0);
 
 
-	// 1. load all the files...
+	// load all the files...
 	for (int i = 0; i < argc; ++i) {
 		std::string path(argv[i]);
 
@@ -269,56 +531,12 @@ int main(int argc, char **argv) {
 		sn_parse_unit(path, unit);
 	}
 
-	// check for duplicate symbols?
+	// merge into omf segments.
+	segments = link_it(units, link_type);
 
-	unsigned sn = 1;
-	omf::segment &seg = segments.emplace_back();
-	seg.segnum = sn;
-
-
-	#if 0
-	struct group_info {
-		unsigned flags;
-		omf::segment *segment = nullptr;
-	};
-	std::unordered_map<std::string, group_info> groups;
-	#endif
-
-	// simple case - link into 1 segment.
+	// build a symbol table.
 	for (auto &u : units) {
-		for (auto &s : u.sections) {
-			if (s.bss_size && s.data.size()) {
-				errx(1, "%s: section %s has bss and data",
-					u.filename.c_str(), s.name.c_str()
-				);
-			}
-			if (s.bss_size) continue; // later
-			s.segnum = seg.segnum;
-			s.offset = seg.data.size();
 
-			append(seg.data, s.data);
-
-			// also update the relocations...
-			for (auto &r : s.relocs) {
-				r.address += s.offset;
-			}
-
-		}
-		uint32_t offset = seg.data.size();
-		for (auto &s : u.sections) {
-			if (!s.bss_size) continue;
-			s.segnum = seg.segnum;
-			s.offset = offset;
-			seg.reserved_space += s.bss_size;
-			offset += s.bss_size;
-
-			// also update the relocations...
-			for (auto &r : s.relocs) {
-				r.address += s.offset;
-			}
-		}
-
-		// process the symbols....
 		for (const auto &sym : u.globals) {
 			const auto &name = sym.name;
 			auto dupe_iter = symbol_table.find(name);
@@ -341,22 +559,19 @@ int main(int argc, char **argv) {
 				continue;
 			}
 
-			auto iter = std::find_if(u.sections.begin(), u.sections.end(),[&sym](const auto &s){
-				return s.section_id == sym.section_id;
-			});
+			auto ss = u.find_section(sym.section_id);
 
-			if (iter == u.sections.end()) {
+			if (!ss) {
 				errx(1, "%s: %s Unable to find section %u",
 					u.filename.c_str(), name.c_str(), sym.section_id
 				);
 			}
 
-			symbol_table.emplace(name, sym_info{ iter->segnum, iter->offset + sym.value });
+			symbol_table.emplace(name, sym_info{ ss->segnum, ss->offset + sym.value });
 		}
 	}
 
-	// now update the relocation expressions
-	// and replace extern/section references with OMF segments.
+	// update the extern references
 	for (auto &u : units) {
 		for (auto &s : u.sections) {
 			for (auto &r : s.relocs) {
@@ -364,53 +579,29 @@ int main(int argc, char **argv) {
 					if (e.op == V_EXTERN) {
 						// extern symbol.
 
-						auto iter1 = std::find_if(u.externs.begin(), u.externs.end(), [&e](const auto &x){
-							return x.symbol_id == e.value;
-						});
-						if (iter1 == u.externs.end()) {
+						auto ee = u.find_extern(e.value);
+
+						if (!ee) {
 							errx(1, "%s: %s: Unable to find symbol %u",
 								u.filename.c_str(), s.name.c_str(), e.value
 							);
 						}
 
-						auto iter2 = symbol_table.find(iter1->name);
-						if (iter2 == symbol_table.end()) {
+						auto iter = symbol_table.find(ee->name);
+						if (iter == symbol_table.end()) {
 							errx(1, "%s: %s Unable to find extern symbol %s",
-								u.filename.c_str(), s.name.c_str(), iter1->name.c_str()
+								u.filename.c_str(), s.name.c_str(), ee->name.c_str()
 							);
 						}
-						const auto &si = iter2->second;
+						const auto &si = iter->second;
 
 						e.value = si.value;
-						// could be a EQU
+						// could be an EQU
 						if (si.segnum == 0) {
 							e.op = V_CONST;
 						} else {
 							e.op = (si.segnum << 8) | V_OMF;
 						}
-					}
-					if (e.op == V_SECTION || e.op == V_FN_SECT) {
-						// SECT() returns the base address of a section. (how is this different from a section reference???)
-
-						// internal section reference.
-
-						auto iter = std::find_if(u.sections.begin(), u.sections.end(), [&e](const auto &x){
-							return x.section_id == e.value;
-						});
-						if (iter == u.sections.end()) {
-							errx(1, "%s: %s: Unable to find section %u",
-								u.filename.c_str(), s.name.c_str(), e.value
-							);
-						}
-
-						const auto &ss = *iter;
-
-						e.op = (ss.segnum << 8) | V_OMF;
-						e.value = ss.offset;
-					}
-					if (e.op == V_FN_GROUP_ORG) {
-						// todo... once groups are supported.
-
 					}
 				}
 				simplify(r);
@@ -418,13 +609,18 @@ int main(int argc, char **argv) {
 		}
 	}
 
+	// final resolution into OMF relocation records
 	resolve(units, segments);
+
+	if (verbose) {
+		print_symbols();
+		print_segments(segments);
+	}
 
 	save_omf(outfile, segments, omf_flags);
 	set_file_type(outfile, file_type, aux_type);
 
-	if (verbose)
-		print_symbols();
+
 
 	return 0;
 }

@@ -88,6 +88,63 @@ static std::vector<uint8_t> &append(std::vector<uint8_t> &v, InputIt first, Inpu
 
 
 
+sn_file *sn_unit::find_file(const std::string &name) {
+	auto iter = std::find_if(files.begin(), files.end(), [&name](const auto &x){
+		return x.name == name;
+	});
+	return iter == files.end() ? nullptr : &*iter;
+}
+
+sn_file *sn_unit::find_file(unsigned id) {
+	auto iter = std::find_if(files.begin(), files.end(), [id](const auto &x){
+		return x.file_id == id;
+	});
+	return iter == files.end() ? nullptr : &*iter;
+}
+
+sn_group *sn_unit::find_group(const std::string &name) {
+	auto iter = std::find_if(groups.begin(), groups.end(), [&name](const auto &x){
+		return x.name == name;
+	});
+	return iter == groups.end() ? nullptr : &*iter;
+}
+
+sn_group *sn_unit::find_group(unsigned id) {
+	auto iter = std::find_if(groups.begin(), groups.end(), [id](const auto &x){
+		return x.group_id == id;
+	});
+	return iter == groups.end() ? nullptr : &*iter;
+}
+
+sn_section *sn_unit::find_section(const std::string &name) {
+	auto iter = std::find_if(sections.begin(), sections.end(), [&name](const auto &x){
+		return x.name == name;
+	});
+	return iter == sections.end() ? nullptr : &*iter;
+}
+
+sn_section *sn_unit::find_section(unsigned id) {
+	auto iter = std::find_if(sections.begin(), sections.end(), [id](const auto &x){
+		return x.section_id == id;
+	});
+	return iter == sections.end() ? nullptr : &*iter;
+}
+
+sn_symbol *sn_unit::find_extern(const std::string &name) {
+	auto iter = std::find_if(externs.begin(), externs.end(), [&name](const auto &x){
+		return x.name == name;
+	});
+	return iter == externs.end() ? nullptr : &*iter;
+}
+
+sn_symbol *sn_unit::find_extern(unsigned id) {
+	auto iter = std::find_if(externs.begin(), externs.end(), [id](const auto &x){
+		return x.symbol_id == id;
+	});
+	return iter == externs.end() ? nullptr : &*iter;
+}
+
+
 // std::unordered_map<std::string, symbol> symbol_table;
 
 

@@ -4,13 +4,26 @@
 
 struct sn_group {
 	std::string name;
-	unsigned flags = 0;
 	unsigned group_id = 0;
+	unsigned flags = 0;
+
+	// unconfirmed flag bits:
+	// $80 = bss
+	// $40 = word
+	// $20 = org (but org not stored anywhere...)
+
+	bool operator==(const std::string &s) const {
+		return name == s;
+	}
 };
 
 struct sn_file {
 	std::string name;
 	unsigned file_id = 0;
+
+	bool operator==(const std::string &s) const {
+		return name == s;
+	}
 };
 
 struct expr_token {
@@ -31,13 +44,22 @@ struct sn_symbol {
 	unsigned symbol_id = 0;
 	unsigned section_id = 0;
 	uint32_t value = 0;
+
+	bool operator==(const std::string &s) const {
+		return name == s;
+	}
+
 };
 
 struct sn_section {
 	std::string name;
 	unsigned section_id = 0;
 	unsigned group_id = 0;
-	unsigned flags = 0; // unknown meaning.
+	unsigned flags = 0;
+	// unconfirmed flag bits:
+	// 8 = 32-bit alignment
+	// 4 = 16-bit aignment
+	// 2 = 8-bit alignment
 
 	unsigned bss_size = 0;
 	std::vector<uint8_t> data;
@@ -46,6 +68,11 @@ struct sn_section {
 	// omf-data
 	unsigned segnum = 0;
 	uint32_t offset = 0;
+
+
+	bool operator==(const std::string &s) const {
+		return name == s;
+	}
 };
 
 struct sn_unit {
@@ -57,6 +84,23 @@ struct sn_unit {
 	std::vector<sn_symbol> locals;
 	std::vector<sn_symbol> globals;
 	std::vector<sn_symbol> externs;
+
+	sn_file *find_file(const std::string &name);
+	sn_file *find_file(unsigned id);
+
+	sn_group *find_group(const std::string &name);
+	sn_group *find_group(unsigned id);
+
+//	const sn_group *find_group(const std::string &name) const;
+//	const sn_group *find_group(unsigned id) const;
+
+	sn_section *find_section(const std::string &name);
+	sn_section *find_section(unsigned id);
+
+	sn_symbol *find_extern(const std::string &name);
+	sn_symbol *find_extern(unsigned id);
+
+
 };
 
 
