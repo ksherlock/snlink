@@ -285,6 +285,15 @@ struct std::hash< std::pair<std::string, std::string> > {
 	}
 };
 
+
+unsigned kind_for_name(const std::string &name) {
+	if (name == ".stack") return 0x0012; // static, public dp/stack segment
+
+	if (name == ".init") return 0x0010; // static, public, init segment
+
+	return 0; // static, public, code.
+}
+
 // link types -
 // 0: 1 segment for everything
 // 1: 1 segment per group
@@ -322,7 +331,7 @@ std::vector<omf::segment> link_it(std::vector<sn_unit> &units, int type) {
 			seg = &rv.emplace_back();
 			seg->segnum = rv.size();
 			seg->segname = gname;
-			// set attributes based on name?
+			seg->kind = kind_for_name(gname);
 		}
 
 
@@ -336,8 +345,8 @@ std::vector<omf::segment> link_it(std::vector<sn_unit> &units, int type) {
 				seg = &rv.emplace_back();
 				seg->segnum = rv.size();
 				seg->segname = sname;
-				// set attributes based on name?
-			}
+				seg->kind = kind_for_name(sname);
+		}
 
 			uint32_t section_offset = seg->data.size();
 
